@@ -90,8 +90,21 @@ pub fn page_height(index: usize) -> u32 {
         Some("setra-516") => 777,
         Some("setra-531") => 761,
         Some("man-lions-coach") => 778,
+        // A portrait screen, about 0.615:1 (a car's centre-console display, 10.4 x 16.9 cm where the image goes):
+        // the page laid out tall, squeezed into the frame's rows by the app, stretched back by the game.
+        // 1280 x 2080 is 0.615:1. (A number here, as every arm's: the UI's test reads them.)
+        Some("portrait") => 2080,
         _ => SCREEN_HEIGHT,
     }
+}
+
+/// The portrait layout: a tall screen of a mod vehicle's, whose own GPS script shows this layout's texture
+/// (`/material/ui/westplay/screen_portrait.mat`). Like the tablet's, no script of the game's draws it.
+pub const PORTRAIT: &str = "portrait";
+
+/// Whether the layout `id` is drawn by no GPS script of the game's (the mod brings only its texture).
+pub fn texture_only_layout(id: &str) -> bool {
+    id == TABLET || id == PORTRAIT
 }
 
 /// WestPlay's tablet's layout: a dashboard toy any truck can have (WestPlay shows on it in every truck), its
@@ -215,9 +228,9 @@ fn parse_screen_layouts(text: &'static str) -> Vec<ScreenLayout> {
             let mut fields = line.split_whitespace();
             let id = fields.next().unwrap_or_default();
             let gps_scripts: Vec<&'static str> = fields.collect();
-            // Only the tablet is drawn by no script: any other line without one is a mistake.
+            // Only the tablet and the portrait screen are drawn by no script: any other line without one is a mistake.
             assert!(
-                !gps_scripts.is_empty() || id == TABLET,
+                !gps_scripts.is_empty() || texture_only_layout(id),
                 "screen_layouts.txt: expected `id gps-script...`, got {line:?}"
             );
             // Read once, for the program's life.
@@ -938,6 +951,19 @@ mod tests {
         assert_eq!(page_height(index("daf-2021")), SCREEN_HEIGHT);
         assert_eq!(page_height(index("renault-t-2024")), SCREEN_HEIGHT);
         assert_eq!(page_height(screen_layouts().len()), SCREEN_HEIGHT);
+    }
+
+    #[test]
+    fn the_portrait_screen_is_tall_last_and_shown_in_any_vehicle() {
+        let layouts = screen_layouts();
+        let portrait = layouts.iter().position(|layout| layout.id == PORTRAIT).unwrap();
+        // Last, so no other layout's texture size moved: 1280 x 733.
+        assert_eq!(portrait, layouts.len() - 1);
+        assert_eq!(ScreenLayout::texture_height(portrait), 733);
+        assert_eq!(screen_layout_for_texture(SCREEN_WIDTH, 733), Some(portrait));
+        assert!(layouts[portrait].gps_scripts.is_empty());
+        assert!(page_height(portrait) > SCREEN_WIDTH, "taller than wide");
+        assert!(screen_supported(portrait, "vehicle.lamborghini.revuelto"));
     }
 
     #[test]
