@@ -1,0 +1,47 @@
+# Builds WestPlay with the portrait screen layout, without an installer (no signing key needed): the app
+# (westplay.exe with its UI), the game plugin (westplay.dll) and the map builder (westplay-maps.exe), plus the UI's
+# files, as one downloadable artifact. Runs the tests first.
+name: portrait-build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Test (Rust)
+        run: cargo test --workspace
+
+      - name: Test (UI)
+        run: npm test --prefix ui
+
+      - name: Build plugin and map builder
+        run: cargo build --release -p westplay-plugin -p westplay-maps
+
+      - name: Build app (with its UI)
+        run: npx tauri build --no-bundle
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item target/release/westplay.exe, target/release/westplay.dll, target/release/westplay-maps.exe out/
+          Copy-Item ui/dist out/ui -Recurse
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: westplay-portrait
+          path: out/
