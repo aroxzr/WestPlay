@@ -45,6 +45,17 @@ pub struct ScreenLayout {
     /// The game's scripts, e.g. `ui/dashboard/scania_2025_gps.sii`: usually one, or the same screen's in
     /// km/h and in mph (the Iveco S-Way's), sharing the layout's texture.
     pub gps_scripts: &'static [&'static str],
+    /// A screen of the player's own (`screens.txt` in WestPlay's Documents folder, [`custom_screens_file`]): the
+    /// height its page is laid out at, and the UI's size on it in percent (100: as on most screens). `None` for
+    /// WestPlay's own layouts, whose page heights are [`page_height`]'s.
+    pub custom: Option<CustomScreen>,
+}
+
+/// What the player's `screens.txt` says of one of their screens ([`ScreenLayout::custom`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CustomScreen {
+    pub page_height: u32,
+    pub ui_scale_percent: u32,
 }
 
 impl ScreenLayout {
@@ -55,11 +66,126 @@ impl ScreenLayout {
     }
 }
 
-/// All screen layouts, in `screen_layouts.txt` order (the order defines the texture sizes).
+/// All screen layouts, in `screen_layouts.txt` order (the order defines the texture sizes), then the player's own
+/// screens from [`custom_screens_file`], in its order (read once, as the program starts: the app and the game are
+/// started again for a change to it to show).
 pub fn screen_layouts() -> &'static [ScreenLayout] {
-    static LAYOUTS: LazyLock<Vec<ScreenLayout>> =
-        LazyLock::new(|| parse_screen_layouts(include_str!("../screen_layouts.txt")));
+    static LAYOUTS: LazyLock<Vec<ScreenLayout>> = LazyLock::new(|| {
+        let mut layouts = builtin_screen_layouts();
+        let text = custom_screens_file().and_then(|file| std::fs::read_to_string(file).ok()).unwrap_or_default();
+        let custom = parse_custom_screens(&text, &layouts);
+        layouts.extend(custom);
+        layouts
+    });
     &LAYOUTS
+}
+
+/// WestPlay's own layouts alone (`screen_layouts.txt`).
+fn builtin_screen_layouts() -> Vec<ScreenLayout> {
+    parse_screen_layouts(include_str!("../screen_layouts.txt"))
+}
+
+/// The player's own screens: `screens.txt` in WestPlay's folder in Documents (beside its screens mod).
+pub fn custom_screens_file() -> Option<std::path::PathBuf> {
+    Some(westplay_documents()?.join("screens.txt"))
+}
+
+/// WestPlay's own folder in Windows' Documents (wherever Documents is: it may be moved, to OneDrive say).
+pub fn westplay_documents() -> Option<std::path::PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
+    // SAFETY: Windows hands back a CoTaskMem string, read before it's freed here.
+    let documents = unsafe {
+        let path = SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None).ok()?;
+        let result = path.to_string().ok().map(std::path::PathBuf::from);
+        CoTaskMemFree(Some(path.0 as *const _));
+        result
+    };
+    Some(documents?.join("WestPlay"))
+}
+
+/// At most this many of the player's own screens (each a texture of its own in the mod, 3.7 MB).
+pub const MAX_CUSTOM_SCREENS: usize = 16;
+
+/// The player's screens in `text` (`screens.txt`), each on a line of its own:
+///
+/// ```text
+/// # name          width x height (any unit: cm, pixels…)   UI size in % (optional, 100 when left out)
+/// my-car-console  10.4 x 16.9                              160
+/// ```
+///
+/// A name is lowercase letters, digits and `-`, and not one of `builtin`'s. A line that isn't one is passed over
+/// (the app's log says which, `custom_screen_problems`), as are lines after [`MAX_CUSTOM_SCREENS`].
+pub fn parse_custom_screens(text: &str, builtin: &[ScreenLayout]) -> Vec<ScreenLayout> {
+    let mut screens: Vec<ScreenLayout> = Vec::new();
+    for line in text.lines() {
+        if screens.len() == MAX_CUSTOM_SCREENS {
+            break;
+        }
+        let Ok(Some((id, custom))) = parse_custom_screen(line) else { continue };
+        if builtin.iter().chain(&screens).any(|layout| layout.id == id) {
+            continue;
+        }
+        let id: &'static str = Box::leak(id.into_boxed_str());
+        screens.push(ScreenLayout { id, gps_scripts: &[], custom: Some(custom) });
+    }
+    screens
+}
+
+/// What's wrong with each line of `text` (`screens.txt`) that isn't a screen, for the log: (line number, why).
+pub fn custom_screen_problems(text: &str, builtin: &[ScreenLayout]) -> Vec<(usize, String)> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut problems = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        match parse_custom_screen(line) {
+            Ok(Some((id, _))) => {
+                if builtin.iter().any(|layout| layout.id == id) || seen.contains(&id) {
+                    problems.push((number + 1, format!("the name {id} is taken")));
+                } else if seen.len() == MAX_CUSTOM_SCREENS {
+                    problems.push((number + 1, format!("more than {MAX_CUSTOM_SCREENS} screens")));
+                }
+                seen.push(id);
+            }
+            Ok(None) => {}
+            Err(why) => problems.push((number + 1, why)),
+        }
+    }
+    problems
+}
+
+/// One line of `screens.txt`: a screen, nothing (blank, or a `#` comment), or why it isn't one.
+fn parse_custom_screen(line: &str) -> Result<Option<(String, CustomScreen)>, String> {
+    let line = line.split('#').next().unwrap_or_default().trim();
+    if line.is_empty() {
+        return Ok(None);
+    }
+    // `name 10.4 x 16.9 160`: the name, then the size, its `x` alone or touching the numbers (`10.4x16.9`).
+    let (id, size) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+    let id = id.to_lowercase();
+    if !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        return Err(format!("the name {id} has more than lowercase letters, digits and -"));
+    }
+    let spaced = size.replace(['x', 'X', '×'], " x ");
+    let rest: Vec<&str> = spaced.split_whitespace().collect();
+    let rest = rest.as_slice();
+    let number = |text: &str| text.replace(',', ".").parse::<f64>().ok().filter(|n| n.is_finite() && *n > 0.0);
+    let (width, height, scale) = match rest {
+        [w, "x", h] => (number(w), number(h), Some(100.0)),
+        [w, "x", h, s] => (number(w), number(h), number(s.trim_end_matches('%'))),
+        _ => return Err("expected: name width x height [UI size %]".into()),
+    };
+    let (Some(width), Some(height), Some(scale)) = (width, height, scale) else {
+        return Err("the sizes must be numbers above 0".into());
+    };
+    let page_height = (f64::from(SCREEN_WIDTH) * height / width).round();
+    // Between 1:4 (very wide) and 4:1 (very tall).
+    if !(320.0..=5120.0).contains(&page_height) {
+        return Err("the screen is too wide or too tall (keep it between 4:1 and 1:4)".into());
+    }
+    if !(25.0..=400.0).contains(&scale) {
+        return Err("the UI size is a percentage between 25 and 400".into());
+    }
+    Ok(Some((id, CustomScreen { page_height: page_height as u32, ui_scale_percent: scale.round() as u32 })))
 }
 
 /// The height WestPlay's page is laid out at on the layout at `index` (in [`screen_layouts`]), its width
@@ -79,6 +205,9 @@ pub fn screen_layouts() -> &'static [ScreenLayout] {
 /// 2024) 19.87 x 11.35 cm (1.750:1); the DAF 2021's 22.37 x 12.58 cm and the Renault T 2024's 19.93 x 11.21 cm,
 /// 16:9, the frame's own.
 pub fn page_height(index: usize) -> u32 {
+    if let Some(custom) = screen_layouts().get(index).and_then(|layout| layout.custom) {
+        return custom.page_height;
+    }
     match screen_layouts().get(index).map(|layout| layout.id) {
         Some("generic") => 793,
         Some("scania-2025") => 784,
@@ -102,9 +231,10 @@ pub fn page_height(index: usize) -> u32 {
 /// (`/material/ui/westplay/screen_portrait.mat`). Like the tablet's, no script of the game's draws it.
 pub const PORTRAIT: &str = "portrait";
 
-/// Whether the layout `id` is drawn by no GPS script of the game's (the mod brings only its texture).
+/// Whether the layout `id` is drawn by no GPS script of the game's (the mod brings only its texture): the tablet,
+/// the portrait screen and the player's own screens.
 pub fn texture_only_layout(id: &str) -> bool {
-    id == TABLET || id == PORTRAIT
+    id == TABLET || id == PORTRAIT || screen_layouts().iter().any(|layout| layout.id == id && layout.custom.is_some())
 }
 
 /// WestPlay's tablet's layout: a dashboard toy any truck can have (WestPlay shows on it in every truck), its
@@ -230,11 +360,12 @@ fn parse_screen_layouts(text: &'static str) -> Vec<ScreenLayout> {
             let gps_scripts: Vec<&'static str> = fields.collect();
             // Only the tablet and the portrait screen are drawn by no script: any other line without one is a mistake.
             assert!(
-                !gps_scripts.is_empty() || texture_only_layout(id),
+                // (Not `texture_only_layout`: that reads `screen_layouts`, which this makes.)
+                !gps_scripts.is_empty() || id == TABLET || id == PORTRAIT,
                 "screen_layouts.txt: expected `id gps-script...`, got {line:?}"
             );
             // Read once, for the program's life.
-            ScreenLayout { id, gps_scripts: Box::leak(gps_scripts.into_boxed_slice()) }
+            ScreenLayout { id, gps_scripts: Box::leak(gps_scripts.into_boxed_slice()), custom: None }
         })
         .collect()
 }
@@ -954,11 +1085,41 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_players_own_screens_and_says_whats_wrong_with_the_rest() {
+        let builtin = builtin_screen_layouts();
+        let text = "# my screens\n\
+                    max-dash      30 x 12\n\
+                    tall-one 10,4x16.9 160%   # a car's console\n\
+                    \n\
+                    portrait 1 x 2\n\
+                    Bad_Name 3 x 4\n\
+                    flat 100 x 1\n\
+                    no-size\n\
+                    max-dash 1 x 1\n";
+        let screens = parse_custom_screens(text, &builtin);
+        let found: Vec<(&str, u32, u32)> = screens
+            .iter()
+            .map(|screen| {
+                let custom = screen.custom.unwrap();
+                (screen.id, custom.page_height, custom.ui_scale_percent)
+            })
+            .collect();
+        // 1280 x 12/30 = 512; 1280 x 16.9/10.4 = 2080.
+        assert_eq!(found, [("max-dash", 512, 100), ("tall-one", 2080, 160)]);
+        assert!(screens.iter().all(|screen| screen.gps_scripts.is_empty()));
+        let problems: Vec<usize> = custom_screen_problems(text, &builtin).into_iter().map(|(line, _)| line).collect();
+        assert_eq!(problems, [5, 6, 7, 8, 9]);
+        // At most MAX_CUSTOM_SCREENS of them.
+        let many: String = (0..40).map(|n| format!("s{n} 16 x 9\n")).collect();
+        assert_eq!(parse_custom_screens(&many, &builtin).len(), MAX_CUSTOM_SCREENS);
+    }
+
+    #[test]
     fn the_portrait_screen_is_tall_last_and_shown_in_any_vehicle() {
         let layouts = screen_layouts();
         let portrait = layouts.iter().position(|layout| layout.id == PORTRAIT).unwrap();
-        // Last, so no other layout's texture size moved: 1280 x 733.
-        assert_eq!(portrait, layouts.len() - 1);
+        // WestPlay's last, so no other layout's texture size moved: 1280 x 733 (the player's own come after it).
+        assert_eq!(portrait, builtin_screen_layouts().len() - 1);
         assert_eq!(ScreenLayout::texture_height(portrait), 733);
         assert_eq!(screen_layout_for_texture(SCREEN_WIDTH, 733), Some(portrait));
         assert!(layouts[portrait].gps_scripts.is_empty());
