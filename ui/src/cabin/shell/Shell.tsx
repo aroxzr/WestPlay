@@ -16,6 +16,7 @@ import { useSidebarPeek } from './sidebarPeek'
 import { VolumeHud } from './VolumeHud'
 import './transitions.css'
 import './portrait.css'
+import { CustomStyles } from './CustomStyles'
 import { Wallpaper } from './Wallpaper'
 
 interface ShellProps {
@@ -40,6 +41,8 @@ export function Shell({ children, overlay, entering = false }: ShellProps) {
   const stripId = useOemStrip()
   const strip = stripId && OEM_STRIPS[stripId]
   const layout = useLive((state) => state.screenLayout)
+  // The screen's name on the page (`data-screen`), for the player's own styles to pick a screen by.
+  const screenName = useLive((state) => state.screenName)
   const insets = strip ? frameInsets(strip.insets, layout) : NO_INSETS
   const style = {
     '--oem-left': `${insets.left}px`,
@@ -118,7 +121,8 @@ export function Shell({ children, overlay, entering = false }: ShellProps) {
   }, [truckScreen, profile.scale, insets.left, insets.bottom])
 
   return (
-    <main className={`shell appearance-${appearance}`} style={style}>
+    <main className={`shell appearance-${appearance}`} style={style} data-screen={screenName ?? undefined}>
+      <CustomStyles />
       {strip && !isInHost() && <GameStripPreview name={strip.name} />}
       <div
         ref={carplay}
