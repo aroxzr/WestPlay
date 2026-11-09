@@ -15,6 +15,7 @@ import { Sidebar } from './Sidebar'
 import { useSidebarPeek } from './sidebarPeek'
 import { VolumeHud } from './VolumeHud'
 import './transitions.css'
+import './portrait.css'
 import { Wallpaper } from './Wallpaper'
 
 interface ShellProps {
