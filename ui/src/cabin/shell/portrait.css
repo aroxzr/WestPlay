@@ -1,0 +1,95 @@
+/* A tall screen (the `portrait` layout, crates/shared screen_layouts.txt: a car's centre-console display, the page
+   laid out 1280 x 2080, about 800 x 1300 of the UI's own units at its scale): CarPlay's portrait look. The sidebar
+   is a dock along the bottom, its clock at one end and its buttons at the other, and the screens take the whole
+   width above it. Any screen taller than wide gets it, by the CarPlay area's own shape (shell.css `carplay`). */
+
+@container carplay (orientation: portrait) {
+  /* Where the screens end (`--content-bottom`): the dock, as tall as the sidebar is wide in landscape, so its
+     round ends and the panels' corners keep their radius (shell.css `--sidebar-radius`), and a gap. The screens
+     start at the margin (`--content-left`). */
+  .carplay-content > * {
+    --dock-height: var(--sidebar-width);
+    --content-left: var(--edge);
+    --content-bottom: calc(var(--edge) + var(--dock-height) + var(--tile-gap));
+    --keyboard-bottom: calc(var(--content-bottom) + 8px);
+  }
+
+  .carplay-content .sidebar {
+    top: auto;
+    right: var(--edge);
+    width: auto;
+    height: var(--dock-height);
+    flex-direction: row;
+    padding: 0 calc(var(--sidebar-radius) * 0.6);
+  }
+
+  .carplay-content .status {
+    flex: none;
+    min-width: max-content;
+  }
+
+  .carplay-content .recent {
+    flex-direction: row;
+    gap: 28px;
+  }
+
+  .carplay-content .sidebar-actions {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  /* The screens above the dock. */
+  .carplay-content .app-panel,
+  .carplay-content .screen.home,
+  .carplay-content .screen.dashboard {
+    bottom: var(--content-bottom);
+  }
+
+  .shell .am-prompt-veil {
+    inset: calc(-1 * var(--edge)) calc(-1 * var(--edge)) calc(-1 * var(--content-bottom)) calc(-1 * var(--edge));
+  }
+
+  /* A video full screen: the dock steps aside downwards (apps/youtube/youtube.css slides the sidebar out left). */
+  .shell .carplay.watching .sidebar {
+    transform: translateY(calc(100% + var(--edge) + 24px));
+  }
+
+  .shell .carplay.watching.peek-sidebar .sidebar {
+    transform: none;
+  }
+
+  /* Dashboard: the map on top, the widgets in a band below it (dashboard.css lays them side by side: the same
+     moves, turned a quarter, the map's window cut from below instead of from the right). */
+  .carplay-content .widgets {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: 40%;
+  }
+
+  .carplay-content .map-grown .widgets {
+    transform: translateY(calc(100% + var(--tile-gap, 16px)));
+  }
+
+  .carplay-content .has-widgets:not(.map-grown) :is(.map-window, .map-shadow-moving) {
+    transform: translateY(calc(-40% - var(--tile-gap, 16px)));
+  }
+
+  .carplay-content .has-widgets:not(.map-grown) .map-still {
+    transform: translateY(calc(40% + var(--tile-gap, 16px)));
+  }
+
+  .carplay-content .has-widgets:not(.map-wide) .map-content {
+    left: 0;
+    top: calc(40% + var(--tile-gap, 16px));
+  }
+
+  .carplay-content .has-widgets.map-wide:not(.map-grown) .map-content {
+    transform: translateY(calc(20% + var(--tile-gap, 16px) / 2));
+  }
+
+  .carplay-content .has-widgets:not(.map-grown) .map-blocked {
+    margin-right: 0;
+    margin-bottom: calc(40% + var(--tile-gap, 16px));
+  }
+}
