@@ -258,6 +258,13 @@ export interface LiveState {
   job: JobInfo | null
   /** The kind of screen the game draws WestPlay on; `null` until it has drawn one. */
   screenLayout: ScreenLayoutId | null
+  /** The screen's id as the host says it, WestPlay's own or one of the player's (`screens.txt`); `null` until a
+   * screen has been drawn. Names the player's style file for it (shell/CustomStyles.tsx). */
+  screenName: string | null
+  /** One of the player's own screens (`screens.txt`): its page's height and the UI's size on it. */
+  customScreen: { pageHeight: number; scale: number } | null
+  /** The player's own styles as the host last said (`null`: not told yet, or not in the host). */
+  stylesVersion: string | null
   /** The cities whose garages the player owns, and their headquarters' (none until the host has read their
    * save). */
   ownedGarages: string[]
@@ -332,6 +339,9 @@ export const useLive = create<LiveState>()(() => ({
   truck: previewTruck(),
   job: null,
   screenLayout: previewLayout(),
+  screenName: previewLayout(),
+  customScreen: null,
+  stylesVersion: null,
   ownedGarages: [],
   headquarters: null,
   hvtMap: null,
@@ -500,7 +510,14 @@ function receiveHostMessage(now: () => number): (message: HostMessage) => void {
         break
       case 'screen':
         // A layout this UI doesn't know yet (newer plugin) is treated like a screen without a profile.
-        useLive.setState({ screenLayout: isScreenLayoutId(message.layout) ? message.layout : null })
+        useLive.setState({
+          screenLayout: isScreenLayoutId(message.layout) ? message.layout : null,
+          screenName: message.layout,
+          customScreen: message.custom ?? null,
+        })
+        break
+      case 'styles':
+        useLive.setState({ stylesVersion: message.version })
         break
       case 'settings': {
         const cabin = useCabin.getState()
