@@ -1,0 +1,24 @@
+/* Example for a screen whose left end is slanted (like a Cadillac Escalade's curved dash screen).
+   The game always shows WestPlay as a rectangle; on a slanted screen the corner past the glass is cut off.
+   This cuts WestPlay along the same slant and keeps buttons out of it.
+   To use it: copy it one folder up and name it after your screen (for example escalade-dash.css),
+   then adjust SLANT until the edge lines up with the glass in the game. */
+
+:root {
+  --slant: 90px; /* how far in the top-left corner is cut (the bottom-left stays square) */
+}
+
+/* Cut the whole interface along the slant, so nothing is drawn past the glass. */
+.carplay {
+  clip-path: polygon(var(--slant) 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Move the side bar and the screens to the right of the slant, so nothing sits under it. */
+.carplay-content > * {
+  --edge: 16px;
+  --content-left: calc(var(--slant) + var(--sidebar-width) + 2 * var(--edge));
+}
+
+.carplay-content .sidebar {
+  left: calc(var(--slant) * 0.6 + var(--edge));
+}
