@@ -90,7 +90,16 @@ export function useAppIcon(role: AppIconRole): string {
 export function useScreenProfile(): ScreenProfile {
   const layout = useLive((state) => state.screenLayout)
   const truck = useLive((state) => state.truck)
-  return useMemo(() => screenProfile(layout, truck), [layout, truck])
+  const name = useLive((state) => state.screenName)
+  const custom = useLive((state) => state.customScreen)
+  return useMemo(
+    () =>
+      // One of the player's own screens (`screens.txt`): the whole screen, at the size they gave.
+      custom
+        ? { name: name ?? 'Custom screen', oemStrip: null, scale: custom.scale, recents: 4 }
+        : screenProfile(layout, truck),
+    [layout, truck, name, custom],
+  )
 }
 
 /** The OEM strip to draw around CarPlay, if any. */
