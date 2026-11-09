@@ -1,0 +1,17 @@
+# WestPlay: your own screen shapes
+#
+# One screen per line:   name   width x height   [UI size %]
+#
+#   name     lowercase letters, digits and - (for example: escalade-dash)
+#   width x height   the screen's shape: measure the visible glass, any unit (cm, mm, pixels)
+#   UI size  optional, 100 if left out. Bigger = larger icons and text (good for small or far screens)
+#
+# Each screen gets its own material in WestPlay's mod:
+#   /material/ui/westplay/screen_<name with - turned into _>.mat     (escalade-dash -> screen_escalade_dash.mat)
+#
+# After editing this file: close ATS and WestPlay, then open WestPlay (it rebuilds its mod), then ATS.
+# Mistakes are listed in Documents\WestPlay\logs\app.log, on lines starting with "screens.txt:".
+#
+# Examples (remove the # in front to use one):
+# escalade-dash   38 x 9.5    140
+# my-truck-tablet 22 x 14
