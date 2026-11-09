@@ -23,7 +23,8 @@ jobs:
         run: npm ci
 
       - name: Test (Rust)
-        run: cargo test --workspace
+        # Two tests check the PC itself (a GPU, not run as admin): GitHub's machines have no GPU and run as admin.
+        run: cargo test --workspace --no-fail-fast -- --skip lists_this_pcs_gpus_with_ids_that_tell_them_apart --skip a_game_run_normally_isnt_elevated
 
       - name: Test (UI)
         run: npm test --prefix ui
