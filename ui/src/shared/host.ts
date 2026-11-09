@@ -95,7 +95,14 @@ export type HostMessage =
   | { type: 'truck'; data: TruckInfo }
   | { type: 'job'; data: JobInfo }
   /** `null` until the game has drawn a WestPlay screen. Checked against the known ids on arrival. */
-  | { type: 'screen'; layout: string | null }
+  | {
+      type: 'screen'
+      layout: string | null
+      /** One of the player's own screens (`screens.txt`): its page's height and the UI's size on it. */
+      custom?: { pageHeight: number; scale: number } | null
+    }
+  /** The player's own styles (`styles` in WestPlay's Documents folder) changed, or the page just loaded. */
+  | { type: 'styles'; version: string }
   /** The settings the page applies: whether the truck's own strip stays beside WestPlay
    * (`westplay_host::settings::TruckStrip`), the wallpaper (`null`: none chosen yet) and the player's icon set
    * (`null`: WestPlay's own). Sent as the page loads and whenever they change. */
