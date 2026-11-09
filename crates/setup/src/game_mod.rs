@@ -23,7 +23,9 @@ use std::path::{Path, PathBuf};
 
 use westplay_mapdata::archive::Archive;
 use westplay_mapdata::files::{GameFiles, Mount};
-use westplay_shared::{CAB_MARK_HEIGHT, CAB_MARK_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH, ScreenLayout, TABLET, screen_layouts};
+use westplay_shared::{
+    CAB_MARK_HEIGHT, CAB_MARK_WIDTH, PORTRAIT, SCREEN_HEIGHT, SCREEN_WIDTH, ScreenLayout, TABLET, screen_layouts,
+};
 
 use crate::cab_mark;
 use crate::game::Kind;
@@ -496,6 +498,11 @@ pub fn build(
                 }
                 Err(_) => built.missing.push(layout.id),
             }
+            continue;
+        }
+        // A portrait screen: only its texture (a mod vehicle's own GPS script shows it), so always there.
+        if layout.id == PORTRAIT {
+            built.patched.push(layout.id);
             continue;
         }
         // A mod vehicle's own screen: whole, or missing (its mod not installed).
