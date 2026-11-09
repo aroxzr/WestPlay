@@ -504,8 +504,9 @@ pub fn build(
             }
             continue;
         }
-        // A portrait screen: only its texture (a mod vehicle's own GPS script shows it), so always there.
-        if layout.id == PORTRAIT {
+        // A portrait screen, or one of the player's own (`screens.txt`): only its texture (a mod vehicle's own GPS
+        // script shows it), so always there.
+        if layout.id == PORTRAIT || layout.custom.is_some() {
             built.patched.push(layout.id);
             continue;
         }
