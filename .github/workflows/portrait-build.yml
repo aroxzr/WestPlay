@@ -1,10 +1,19 @@
 # Builds WestPlay with the portrait screen layout, without an installer (no signing key needed): the app
 # (westplay.exe with its UI), the game plugin (westplay.dll) and the map builder (westplay-maps.exe), plus the UI's
-# files, as one downloadable artifact. Runs the tests first.
+# files and the friends' installer (release/), as one downloadable artifact. Runs the tests first.
+# With "publish" ticked, also makes a GitHub release on this fork with it all as one zip, for sharing.
 name: portrait-build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a release (a public download) with this build
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -41,8 +50,20 @@ jobs:
           New-Item -ItemType Directory out | Out-Null
           Copy-Item target/release/westplay.exe, target/release/westplay.dll, target/release/westplay-maps.exe out/
           Copy-Item ui/dist out/ui -Recurse
+          Copy-Item release/* out/ -Recurse
 
       - uses: actions/upload-artifact@v4
         with:
           name: westplay-portrait
           path: out/
+
+      - name: Publish release
+        if: ${{ inputs.publish }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v2.2.2-custom.${{ github.run_number }}"
+          $zip = "WestPlay-2.2.2-custom.${{ github.run_number }}.zip"
+          Compress-Archive -Path out/* -DestinationPath $zip
+          gh release create $tag $zip --target $env:GITHUB_SHA --title "WestPlay 2.2.2 custom build ${{ github.run_number }} (unofficial)" --notes-file release/README.txt
