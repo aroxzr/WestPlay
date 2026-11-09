@@ -37,3 +37,8 @@ travego-16-23     ui/dashboard/westplay_travego_16_23_gps.sii
 setra-516         ui/dashboard/gps.dlc_toys.sii
 setra-531         ui/dashboard/westplay_setra_531_gps.sii
 man-lions-coach   ui/dashboard/westplay_man_lions_coach_gps.sii
+# A tall (portrait) screen: a mod vehicle's own GPS script shows `/material/ui/westplay/screen_portrait.mat` on it
+# (e.g. a car's centre-console screen). No script of the game's draws it, so the mod patches none: it only brings the
+# texture (as the tablet's). The page is laid out taller than wide (westplay_shared `page_height`). Keep it last:
+# its texture is 1280 x 733, a size of its own.
+portrait
