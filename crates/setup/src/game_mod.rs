@@ -257,7 +257,11 @@ fn mod_screen_files(
 pub fn mod_screens_current(screen_mods: &GameFiles, built: &Path) -> bool {
     let Ok(archive) = Archive::open(built) else { return false };
     let ours = GameFiles::new(vec![Mount::Archive(archive)]);
-    MOD_SCREENS.iter().all(|screen| {
+    // Every layout's texture there: a mod built before a layout was added (the portrait screen's) is made again.
+    let textures = screen_layouts().iter().all(|layout| {
+        ours.read(&format!("{SCREEN_DIR}/{}.tobj", texture_name(layout))).ok().flatten().is_some()
+    });
+    textures && MOD_SCREENS.iter().all(|screen| {
         let Some(index) = screen_layouts().iter().position(|layout| layout.id == screen.layout) else { return false };
         let layout = &screen_layouts()[index];
         let [script] = layout.gps_scripts else { return false };
