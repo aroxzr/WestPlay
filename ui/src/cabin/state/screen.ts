@@ -20,6 +20,7 @@ export const SCREEN_LAYOUT_IDS = [
   'setra-516',
   'setra-531',
   'man-lions-coach',
+  'portrait',
 ] as const
 
 export type ScreenLayoutId = (typeof SCREEN_LAYOUT_IDS)[number]
@@ -54,6 +55,9 @@ const PAGE_HEIGHTS: Partial<Record<ScreenLayoutId, number>> = {
   'setra-516': 777,
   'setra-531': 761,
   'man-lions-coach': 778,
+  // A tall screen (a car's centre console, about 0.615:1): the page laid out taller than wide, the sidebar a dock
+  // along its bottom (shell/portrait.css).
+  portrait: 2080,
 }
 
 /** Frame pixels (SCREEN_WIDTH x SCREEN_HEIGHT, as a screen's script and the truck's strip are measured) as the
@@ -183,6 +187,10 @@ const PROFILES: readonly ProfileEntry[] = [
   { layout: 'setra-516', profile: { name: 'Setra S 516 HD/2', oemStrip: null, scale: 1 } },
   { layout: 'setra-531', profile: { name: 'Setra S 531 DT', oemStrip: null, scale: 1 } },
   { layout: 'man-lions-coach', profile: { name: "MAN Lion's Coach", oemStrip: null, scale: 1 } },
+  // A tall screen of a mod vehicle's (first: the Lamborghini Revuelto's centre console, about 10.4 x 16.9 cm where
+  // the image goes). Narrow, so everything larger (the Scania 7"'s 1.7 is for a 15 cm-wide screen): about 800 x 1300
+  // of the UI's own units, the sidebar a dock along the bottom with room for four apps.
+  { layout: 'portrait', profile: { name: 'Portrait screen', oemStrip: null, scale: 1.6, recents: 4 } },
 ]
 
 /** Screens not tuned yet: CarPlay on the whole screen, its layout adapting to the space (responsive). */
