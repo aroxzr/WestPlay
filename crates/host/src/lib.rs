@@ -280,6 +280,26 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
     let customize_dir = config.data_dir.join(customize::FOLDER);
     let _ = std::fs::create_dir_all(&customize_dir);
     webview.map_folder_to_any_page("westplay.customize", &customize_dir)?;
+    // The player's own styles (`all.css`, and one for each screen: `portrait.css`…), in WestPlay's Documents folder,
+    // looked at for changes every second.
+    let styles_dir = westplay_shared::westplay_documents().map(|dir| dir.join("styles"));
+    if let Some(dir) = &styles_dir {
+        let _ = std::fs::create_dir_all(dir);
+        webview.map_folder_to_any_page("westplay.styles", dir)?;
+    }
+    let mut styles_posted: Option<u64> = None;
+    let mut styles_looked = Instant::now();
+    // The player's own screens (`screens.txt`), and any line of it that isn't one, for the log.
+    for layout in screen_layouts().iter().filter(|layout| layout.custom.is_some()) {
+        let custom = layout.custom.unwrap_or(westplay_shared::CustomScreen { page_height: 0, ui_scale_percent: 0 });
+        log!("screens.txt: {} laid out 1280x{} at {}%", layout.id, custom.page_height, custom.ui_scale_percent);
+    }
+    if let Some(text) = westplay_shared::custom_screens_file().and_then(|file| std::fs::read_to_string(file).ok()) {
+        let builtin: Vec<_> = screen_layouts().iter().filter(|layout| layout.custom.is_none()).copied().collect();
+        for (line, why) in westplay_shared::custom_screen_problems(&text, &builtin) {
+            log!("screens.txt: line {line} left out: {why}");
+        }
+    }
     // Player: the game's music folder, listed off this thread (music_folder.rs); its songs' covers for the page.
     let music_covers = config.data_dir.join("music-covers");
     let _ = std::fs::create_dir_all(&music_covers);
@@ -670,6 +690,16 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
             let _ = webview.post_json(&message);
             customize_message = Some(message);
         }
+        if let Some(dir) = &styles_dir
+            && styles_looked.elapsed() >= Duration::from_secs(1)
+        {
+            styles_looked = Instant::now();
+            let stamp = styles_stamp(dir);
+            if styles_posted != Some(stamp) {
+                styles_posted = Some(stamp);
+                let _ = webview.post_json(&styles_message(stamp));
+            }
+        }
 
         if applied_settings != Some(config.settings.generation()) {
             applied_settings = Some(config.settings.generation());
@@ -847,6 +877,9 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
                     let _ = webview.post_json(&settings_message(&config.settings.get()));
                     if let Some(message) = &customize_message {
                         let _ = webview.post_json(message);
+                    }
+                    if let Some(stamp) = styles_posted {
+                        let _ = webview.post_json(&styles_message(stamp));
                     }
                     let youtube = youtube_message.iter().chain(&youtube_account_message);
                     let all = player_messages.iter().chain(route).chain(&weather_message).chain(youtube);
@@ -2103,8 +2136,37 @@ fn game_adapter(bridge: &BridgeMapping) -> Option<LUID> {
 /// `{"type":"screen","layout":"scania-2025"}`: which kind of screen the game draws WestPlay on, from the
 /// bridge's `screen_layout` (`null` until a screen has been drawn).
 fn screen_message(layout: u32) -> String {
-    let id = (layout as usize).checked_sub(1).and_then(|index| screen_layouts().get(index)).map(|l| l.id);
-    serde_json::json!({ "type": "screen", "layout": id }).to_string()
+    let layout = (layout as usize).checked_sub(1).and_then(|index| screen_layouts().get(index));
+    let id = layout.map(|l| l.id);
+    // One of the player's own screens (`screens.txt`): its page's height and the UI's size on it.
+    let custom = layout.and_then(|l| l.custom).map(|custom| {
+        serde_json::json!({ "pageHeight": custom.page_height, "scale": f64::from(custom.ui_scale_percent) / 100.0 })
+    });
+    serde_json::json!({ "type": "screen", "layout": id, "custom": custom }).to_string()
+}
+
+/// The player's own styles (`styles` in WestPlay's Documents folder, served at `https://westplay.styles/`): a stamp
+/// of its files (names, sizes, when written), which changes as they're edited, so the page loads them again.
+fn styles_stamp(dir: &std::path::Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut entries: Vec<(String, u64, Option<std::time::SystemTime>)> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            Some((entry.file_name().to_string_lossy().into_owned(), metadata.len(), metadata.modified().ok()))
+        })
+        .collect();
+    entries.sort();
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    entries.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// `{"type":"styles","version":"…"}`: the player's own styles changed (or the page just loaded).
+fn styles_message(stamp: u64) -> String {
+    serde_json::json!({ "type": "styles", "version": format!("{stamp:x}") }).to_string()
 }
 
 /// `{"type":"settings","truckStrip":"auto","wallpaper":"plain","iconSet":null,"iconStyle":"auto","equalizer":…}`: the
@@ -2769,8 +2831,8 @@ mod tests {
 
     #[test]
     fn screen_message_names_the_layout() {
-        assert_eq!(screen_message(0), r#"{"layout":null,"type":"screen"}"#);
-        assert_eq!(screen_message(1), r#"{"layout":"generic","type":"screen"}"#);
-        assert_eq!(screen_message(999), r#"{"layout":null,"type":"screen"}"#);
+        assert_eq!(screen_message(0), r#"{"custom":null,"layout":null,"type":"screen"}"#);
+        assert_eq!(screen_message(1), r#"{"custom":null,"layout":"generic","type":"screen"}"#);
+        assert_eq!(screen_message(999), r#"{"custom":null,"layout":null,"type":"screen"}"#);
     }
 }
