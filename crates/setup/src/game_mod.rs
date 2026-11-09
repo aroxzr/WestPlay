@@ -930,23 +930,37 @@ fn add_to(
         place([coord("coords_l")?, coord("coords_r")?, coord("coords_t")?, coord("coords_b")?]);
     let at = |value: f64| format!("{}", value.round() as i64);
 
+    // Its children listed either counted (`my_children: 2`, `my_children[0]: …`) or appended (`my_children[]: …`, as
+    // some mods' scripts are, e.g. the Lamborghini Revuelto's dashboard: 2026-11-08, its image left without a parent
+    // made the script two unit trees, which the game refused and then crashed on).
+    let window_lines = &lines[window.start + 1..window.end];
+    let appended = window_lines.iter().rposition(|line| line.trim().starts_with("my_children[]:"));
     let mut body = Vec::new();
-    for line in &lines[window.start + 1..window.end] {
+    let mut added = false;
+    for (index, line) in window_lines.iter().enumerate() {
         let trimmed = line.trim();
-        let line = if trimmed.starts_with("my_children:") {
+        let line = if appended.is_none() && trimmed.starts_with("my_children:") {
             format!(" my_children: {}", count + 1)
         } else {
             (*line).to_owned()
         };
-        let after = if count == 0 {
-            trimmed.starts_with("my_children:")
-        } else {
-            trimmed.starts_with(&format!("my_children[{}]:", count - 1))
+        let after = match appended {
+            Some(last) => index == last,
+            None if count == 0 => trimmed.starts_with("my_children:"),
+            None => trimmed.starts_with(&format!("my_children[{}]:", count - 1)),
         };
         body.push(line);
         if after {
-            body.push(format!(" my_children[{count}]: {element}"));
+            body.push(match appended {
+                Some(_) => format!(" my_children[]: {element}"),
+                None => format!(" my_children[{count}]: {element}"),
+            });
+            added = true;
         }
+    }
+    // Never an image without a parent: the script is left as it is instead.
+    if !added {
+        return Err(format!("{parent}'s children aren't listed as WestPlay knows them"));
     }
     let image = [
         String::new(),
@@ -1151,6 +1165,21 @@ mod tests {
         }
         drop(archive);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn marks_a_dashboard_whose_children_are_appended_never_leaving_the_mark_without_a_parent() {
+        // The Lamborghini Revuelto mod's dashboard (2026-11-08): `my_children[]:`, no count.
+        let script = "SiiNunit\r\n{\r\nui::window : _nameless.mainwin {\r\n my_children[]: .display0\r\n my_children[]: .sharedisplay\r\n coords_l: 0\r\n coords_r: 2048\r\n coords_t: 2048\r\n coords_b: 0\r\n my_parent: null\r\n}\r\n\r\n}\r\n";
+        let patched = patch_dashboard_script(script, "cab_mark").unwrap();
+        assert!(
+            patched.contains(" my_children[]: .sharedisplay\r\n my_children[]: _nameless.westplay.cab\r\n"),
+            "{patched}"
+        );
+        assert!(!patched.contains("my_children:"), "{patched}");
+        // A window with no children listed at all: left as it is, not given an orphan.
+        let bare = "SiiNunit\n{\nui::window : _nameless.w {\n coords_l: 0\n coords_r: 10\n coords_t: 10\n coords_b: 0\n my_parent: null\n}\n\n}\n";
+        assert!(patch_dashboard_script(bare, "cab_mark").is_err());
     }
 
     #[test]
