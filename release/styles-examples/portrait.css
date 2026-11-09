@@ -1,0 +1,20 @@
+/* Example style for the Revuelto's portrait screen.
+   To use it: copy this file one folder up (into Documents\WestPlay\styles\) and edit it.
+   Changes show on the in-game screen within a second, with no restart.
+   The file name picks the screen: portrait.css applies only to the "portrait" screen,
+   all.css applies to every screen, and <your-screen-name>.css to one of your own screens from screens.txt. */
+
+/* Make the bottom dock a little shorter (it's as tall as the side bar is wide, about 140). */
+.carplay-content > * {
+  --dock-height: 120px;
+}
+
+/* Rounder corners on every panel. */
+:root {
+  --panel-radius: 40px;
+}
+
+/* A tinted glass look for the dock. */
+.sidebar {
+  background: rgb(20 40 80 / 0.55);
+}
